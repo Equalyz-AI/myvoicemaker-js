@@ -11,8 +11,8 @@ export class ExplainModule extends BaseModule {
     if (params.target_language !== undefined) {
       body["target_language"] = params.target_language;
     }
-    if (params.max_tokens !== undefined) {
-      body["max_tokens"] = params.max_tokens;
+    if (params.max_words !== undefined) {
+      body["max_words"] = params.max_words;
     }
 
     const { data } = await this.http.post<ExplainResponse>(

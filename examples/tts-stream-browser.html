@@ -1,0 +1,68 @@
+<!doctype html>
+<!--
+  Browser streaming TTS demo: type text, hear it within seconds while the rest
+  still synthesizes. Serve this file (any static server), fill in an API key
+  restricted to a test project, and click Speak.
+
+  Bundle note: import { VoiceMaker, createPcmPlayer } from "myvoicemaker" via
+  your bundler; the inline import map below expects a local build of the SDK
+  (run `bun run build` in sdk/ first).
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>myvoicemaker streaming TTS demo</title>
+  </head>
+  <body>
+    <h1>Streaming TTS</h1>
+    <label>API key <input id="key" type="password" size="40" /></label><br />
+    <label>Voice <input id="voice" value="amaka" /></label><br />
+    <textarea id="text" rows="6" cols="60">
+Barka da zuwa. Wannan gwaji ne na karatun rubutu kai tsaye. Kowace jimla tana iso da zarar an gama hada ta.</textarea
+    ><br />
+    <button id="speak">Speak</button>
+    <pre id="log"></pre>
+
+    <script type="module">
+      import { VoiceMaker, createPcmPlayer } from "../dist/index.js";
+
+      const log = (line) => {
+        document.getElementById("log").textContent += line + "\n";
+      };
+
+      document.getElementById("speak").onclick = async () => {
+        const client = new VoiceMaker({
+          apiKey: document.getElementById("key").value.trim(),
+        });
+        // Create the player inside the click handler: browsers only allow
+        // audio to start after a user gesture.
+        const player = createPcmPlayer();
+        player.onUnderrun = () => log("(underrun: playback caught up)");
+
+        const stream = client.tts.stream({
+          voiceId: document.getElementById("voice").value.trim(),
+          language: "auto",
+        });
+        const startedAt = performance.now();
+        let firstAudio = false;
+
+        stream.on("open", (b) => log(`session ${b.session_id}`));
+        stream.on("audio", ({ data }) => {
+          if (!firstAudio) {
+            firstAudio = true;
+            log(`first audio after ${Math.round(performance.now() - startedAt)} ms`);
+          }
+          player.enqueue(data);
+        });
+        stream.on("chunkEnd", (c) => log(`chunk ${c.index}: ${c.duration_seconds}s`));
+        stream.on("error", (e) => log(`error [${e.code}] ${e.message}`));
+        stream.on("end", (e) =>
+          log(`done: ${e.chunks} chunks, ${e.credits_used} credits (${e.reason})`),
+        );
+
+        stream.sendText(document.getElementById("text").value);
+        await stream.close();
+      };
+    </script>
+  </body>
+</html>

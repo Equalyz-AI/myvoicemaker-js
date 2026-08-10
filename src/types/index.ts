@@ -14,6 +14,12 @@ export type {
   TranscribeFileParams,
   ListTranscriptionsParams,
   TranscriptionJob,
+  StreamLanguage,
+  StreamTranscriptionParams,
+  StreamSessionBegin,
+  StreamTranscriptEvent,
+  StreamSessionEnd,
+  StreamErrorEvent,
 } from "./asr.js";
 
 export type {
@@ -23,6 +29,16 @@ export type {
   TtsGenerateParams,
   TtsGenerateResponse,
 } from "./tts.js";
+
+export type {
+  TtsStreamParams,
+  TtsSessionBegin,
+  TtsChunkStart,
+  TtsChunkEnd,
+  TtsSessionEnd,
+  TtsStreamErrorEvent,
+  TtsAudioChunk,
+} from "./tts-stream.js";
 
 export type {
   AnimateGenerateParams,

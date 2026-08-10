@@ -1,7 +1,9 @@
 import { BaseModule } from "./base.js";
 import { poll } from "../utils/poll.js";
+import { AsrStreamConnection } from "../ws/stream-connection.js";
 import type {
   ListTranscriptionsParams,
+  StreamTranscriptionParams,
   TranscribeFileParams,
   TranscribeUrlParams,
   TranscriptionJob,
@@ -73,5 +75,26 @@ export class ASRModule extends BaseModule {
       (result) => TERMINAL_STATUSES.has(result.status),
       options,
     );
+  }
+
+  /**
+   * Open a real-time streaming transcription session (WebSocket).
+   * Send PCM16LE mono audio with sendAudio(); transcripts arrive via
+   * on("transcript", ...) with interim results followed by stable finals.
+   * Requires a global WebSocket (browsers, Node >= 22, Bun, Deno).
+   */
+  stream(params: StreamTranscriptionParams): AsrStreamConnection {
+    const url = this.http.buildWebSocketUrl("/dev/v1/transcribe/stream", {
+      language: params.language,
+      sample_rate: params.sampleRate ?? 16000,
+      interim_results: params.interimResults ?? true,
+    });
+    return new AsrStreamConnection({
+      url,
+      apiKey: this.http.getApiKey(),
+      accessToken: params.accessToken,
+      useSubprotocolAuth: params.useSubprotocolAuth,
+      keepAliveMs: params.keepAliveMs,
+    });
   }
 }

@@ -11,7 +11,13 @@ export interface ExplainParams {
   language: SupportedLanguage;
   action: ExplainAction;
   target_language?: SupportedLanguage;
-  max_tokens?: number;
+  /**
+   * Soft target for response length in words (default 250, max 1000). Not a hard
+   * cap — the response lands close to this value and always completes its
+   * sentences. Billing meters real tokens, so the same `max_words` costs more
+   * credits for Nigerian languages (yo/ig/ha) than for English.
+   */
+  max_words?: number;
 }
 
 export interface ExplainResponse {

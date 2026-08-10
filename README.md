@@ -295,6 +295,50 @@ Throws `TimeoutError` if `timeoutMs` is exceeded before the job completes.
 | `created_at` | `string` (ISO 8601) |
 | `completed_at` | `string \| null` (ISO 8601) |
 
+#### `client.asr.stream(params)` — real-time streaming (WebSocket)
+
+Transcribe live audio with interim results as you speak. Requires a global
+`WebSocket` (browsers, Node >= 22, Bun, Deno) — no extra dependencies.
+
+```typescript
+const stream = client.asr.stream({ language: 'yo', sampleRate: 16000 });
+
+stream.on('open', (s) => console.log('session', s.session_id));
+stream.on('transcript', (t) => {
+  if (t.is_final) console.log('FINAL:', t.text);
+  else console.log('interim:', t.text);
+});
+stream.on('end', (e) => console.log(`used ${e.credits_used} credits over ${e.duration_seconds}s`));
+
+// Send PCM16LE mono chunks (e.g. from a mic or a decoded file), 50-250ms each:
+stream.sendAudio(pcmChunk);
+
+// Force pending words into a final without closing:
+stream.finalize();
+
+// Flush the tail and end the session (resolves with the session summary):
+const summary = await stream.close();
+```
+
+**Parameters**
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `language` | `'yo' \| 'ig' \| 'ha' \| 'pcm' \| 'en'` | Yes | Explicit language — `auto` is batch-only. |
+| `sampleRate` | `number` | No | Sample rate of your PCM16LE mono audio. Default `16000` (8000-48000). |
+| `interimResults` | `boolean` | No | Emit revisable interim transcripts. Default `true`. |
+| `useSubprotocolAuth` | `boolean` | No | Authenticate via `Sec-WebSocket-Protocol` (default, works everywhere incl. browsers). Set `false` to use `?api_key=`. |
+| `keepAliveMs` | `number` | No | KeepAlive interval; `0` disables. Default `10000`. |
+
+**Events**: `open` (session.begin), `transcript` (`{ text, is_final, start, end, confidence }`),
+`finalized`, `end` (`{ duration_seconds, credits_used, reason }`), `error` (`{ code, message }`), `close`.
+
+**Billing**: purchased credits only, at the transcription per-second rate; reserved in
+60-second blocks while streaming and settled to the exact second at close. Idle
+connections (no audio or KeepAlive for 30s) are closed; stream duration is
+capped per plan (up to 60 minutes) — reconnect to continue. The finished
+session is also retrievable afterwards via `client.asr.getResult(job_id)`.
+
 ---
 
 ### Lip-Sync Animation
@@ -363,7 +407,7 @@ const result = await client.explain.process({
   language: 'yo',
   action: 'translate',
   target_language: 'en',
-  max_tokens: 500,
+  max_words: 250,
 });
 
 console.log(result.result);       // translated text
@@ -379,7 +423,7 @@ console.log(result.credits_used); // e.g. 145
 | `language` | `string` | ✓ | Source language code |
 | `action` | `string` | ✓ | `explain` \| `summarize` \| `translate` \| `simplify` |
 | `target_language` | `string` | | Required when `action` is `translate` |
-| `max_tokens` | `number` | | Response length limit: 1–2000 (default `500`) |
+| `max_words` | `number` | | Soft length target in words: 1–1000 (default `250`). Not a hard cap — sentences always complete. |
 
 ---
 

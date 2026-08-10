@@ -1,16 +1,67 @@
-import { readFile } from "node:fs/promises";
-import { basename } from "node:path";
-import { createApiError, type ApiErrorBody } from "../errors/index.js";
+import {
+  createApiError,
+  VoiceMakerError,
+  type ApiErrorBody,
+} from "../errors/index.js";
 import type { ApiResponse, QueryParams, RateLimitHeaders } from "./types.js";
 
+interface NodeFileHelpers {
+  readFile(path: string): Promise<Uint8Array<ArrayBuffer>>;
+  basename(path: string): string;
+}
+
+/**
+ * Node's fs/path are loaded lazily, and only on the file-path code path, so
+ * the package stays importable in browser bundles: a top-level
+ * `import "node:fs/promises"` makes webpack/Turbopack reject the whole SDK,
+ * and browser code never calls postMultipart with a file path anyway.
+ */
+async function loadNodeFileHelpers(): Promise<NodeFileHelpers> {
+  const proc = (
+    globalThis as { process?: { getBuiltinModule?: (id: string) => unknown } }
+  ).process;
+  const getBuiltin = proc?.getBuiltinModule;
+  if (typeof getBuiltin === "function") {
+    const fs = getBuiltin.call(proc, "node:fs/promises") as
+      | NodeFileHelpers
+      | undefined;
+    const path = getBuiltin.call(proc, "node:path") as
+      | NodeFileHelpers
+      | undefined;
+    if (fs && path) {
+      return {
+        readFile: (p) => fs.readFile(p),
+        basename: (p) => path.basename(p),
+      };
+    }
+  }
+  // Node 18-21 has no process.getBuiltinModule: go through a
+  // runtime-constructed import() that bundlers cannot statically trace.
+  const dynamicImport = new Function("s", "return import(s)") as (
+    specifier: string,
+  ) => Promise<Record<string, unknown>>;
+  const [fs, path] = await Promise.all([
+    dynamicImport("node:fs/promises"),
+    dynamicImport("node:path"),
+  ]);
+  return {
+    readFile: fs["readFile"] as NodeFileHelpers["readFile"],
+    basename: path["basename"] as NodeFileHelpers["basename"],
+  };
+}
+
 export interface HttpClientConfig {
-  apiKey: string;
+  /**
+   * Optional so browser clients can stream with ephemeral tokens only
+   * (see auth.createStreamToken) — REST calls still require a key.
+   */
+  apiKey?: string | undefined;
   baseUrl: string;
   timeoutMs: number;
 }
 
 export class HttpClient {
-  private readonly apiKey: string;
+  private readonly apiKey: string | undefined;
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
 
@@ -50,6 +101,7 @@ export class HttpClient {
     const url = this.buildUrl(path);
     const form = new FormData();
 
+    const { readFile, basename } = await loadNodeFileHelpers();
     const fileBuffer = await readFile(filePath);
     const fileName = basename(filePath);
     const blob = new Blob([fileBuffer]);
@@ -81,7 +133,22 @@ export class HttpClient {
     return url.toString();
   }
 
+  /** ws(s):// form of an API URL, for the streaming endpoints. */
+  buildWebSocketUrl(path: string, query?: QueryParams): string {
+    return this.buildUrl(path, query).replace(/^http/i, "ws");
+  }
+
+  /** Exposed for transports (WebSocket) that cannot reuse HTTP headers. */
+  getApiKey(): string | undefined {
+    return this.apiKey;
+  }
+
   private authHeaders(): Record<string, string> {
+    if (!this.apiKey) {
+      throw new VoiceMakerError(
+        "This call requires an apiKey. Keep the key on your backend and, for browser streaming, mint an ephemeral token there (auth.createStreamToken) and pass it as accessToken.",
+      );
+    }
     return { Authorization: `Bearer ${this.apiKey}` };
   }
 

@@ -482,8 +482,6 @@ if (result.status === 'completed') {
 
 Process text in Nigerian languages — explain, summarise, translate, or simplify content using AI.
 
-> **Note:** This module targets a planned endpoint. Check the [changelog](https://myvoicemaker.ai/docs/changelog) for availability.
-
 #### `client.explain.process(params)`
 
 ```typescript

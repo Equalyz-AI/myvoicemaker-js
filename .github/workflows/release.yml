@@ -1,0 +1,67 @@
+name: Release
+
+# Publishes to npm when a version tag (v1.2.3) is pushed.
+# Auth is npm Trusted Publishing (OIDC) — no NPM_TOKEN secret is used.
+# The `release` environment gates the publish step behind required reviewers.
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify tag matches package.json
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare versions
+        run: |
+          PKG="$(node -p "require('./package.json').version")"
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$PKG" != "$TAG" ]; then
+            echo "::error::Tag v$TAG does not match package.json version $PKG"
+            exit 1
+          fi
+          echo "Releasing myvoicemaker@$PKG"
+
+  ci:
+    name: Tests
+    needs: verify
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish to npm
+    needs: [verify, ci]
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+      url: https://www.npmjs.com/package/myvoicemaker
+    permissions:
+      contents: read
+      id-token: write # required for npm Trusted Publishing + provenance
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Ensure npm >= 11.5.1 (trusted publishing support)
+        run: |
+          npm install -g npm@latest
+          npm --version
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Check packed contents
+        run: npm pack --dry-run
+
+      - name: Publish
+        run: npm publish --provenance --access public

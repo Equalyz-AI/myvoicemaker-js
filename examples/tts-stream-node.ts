@@ -21,7 +21,9 @@ const text =
   "Kowace jimla tana iso da zarar an gama hada ta, ba sai an jira komai ba.";
 
 const client = new VoiceMaker({ apiKey });
-const stream = client.tts.stream({ voiceId, language: "auto" });
+// language omitted → the platform's default; pass a code from
+// client.tts.listLanguages() to pin one (e.g. { language: "ha" }).
+const stream = client.tts.stream({ voiceId });
 
 stream.on("open", (begin) => {
   console.log(

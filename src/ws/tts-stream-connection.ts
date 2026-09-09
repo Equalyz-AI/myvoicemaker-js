@@ -6,6 +6,12 @@ import type {
   TtsSessionEnd,
   TtsStreamErrorEvent,
 } from "../types/tts-stream.js";
+import {
+  ConfigurationError,
+  STREAM_ERROR_CODES,
+  StreamClosedError,
+  describeStreamClose,
+} from "../errors/index.js";
 
 export interface TtsStreamEvents {
   /** Server accepted the session (session.begin). */
@@ -22,8 +28,8 @@ export interface TtsStreamEvents {
   error: TtsStreamErrorEvent;
   /** Final session summary (always sent before close). */
   end: TtsSessionEnd;
-  /** Underlying socket closed. */
-  close: { code: number; reason: string };
+  /** Underlying socket closed. `description` explains the close code. */
+  close: { code: number; reason: string; description: string };
 }
 
 type Listener<T> = (payload: T) => void;
@@ -45,6 +51,8 @@ export interface TtsStreamConnectionOptions {
   useSubprotocolAuth?: boolean | undefined;
   /** KeepAlive interval while the socket is open; 0 disables. Default 10s. */
   keepAliveMs?: number | undefined;
+  /** SDK method that opened the connection, used in error messages. */
+  method?: string | undefined;
 }
 
 const SUBPROTOCOL = "vmk.v1";
@@ -71,6 +79,9 @@ export class TtsStreamConnection {
   private closePromise: Promise<TtsSessionEnd | null>;
   private resolveClose!: (end: TtsSessionEnd | null) => void;
   private currentChunkIndex = 0;
+  private readonly method: string;
+  private sessionBegan = false;
+  private abortRequested = false;
 
   // audioChunks() support: buffering starts on the first iterator request so
   // event-only consumers never accumulate audio in memory.
@@ -78,18 +89,16 @@ export class TtsStreamConnection {
   private iteratorWaiter: (() => void) | null = null;
 
   constructor(options: TtsStreamConnectionOptions) {
+    const method = options.method ?? "tts.stream";
     if (typeof WebSocket === "undefined") {
-      throw new Error(
-        "myvoicemaker streaming requires a global WebSocket (Node >= 22, Bun, Deno or a browser).",
-      );
+      throw new ConfigurationError("websocket_unavailable", method);
     }
 
     const credential = options.accessToken ?? options.apiKey;
     if (!credential) {
-      throw new Error(
-        "myvoicemaker streaming requires an apiKey or an accessToken (mint one server-side via auth.createStreamToken).",
-      );
+      throw new ConfigurationError("credential_required", method);
     }
+    this.method = method;
 
     const useSubprotocolAuth = options.useSubprotocolAuth ?? true;
     let url = options.url;
@@ -148,6 +157,7 @@ export class TtsStreamConnection {
       }
       switch (payload.type) {
         case "session.begin":
+          this.sessionBegan = true;
           this.emit("open", payload as unknown as TtsSessionBegin);
           return;
         case "chunk.start":
@@ -177,9 +187,24 @@ export class TtsStreamConnection {
 
     this.ws.addEventListener("close", (event) => {
       this.stopKeepAlive();
+      // Closed before session.begin and not by us: the server refused the
+      // upgrade with an HTTP error the WebSocket API hides. Surface that as a
+      // typed error event so the developer is not left with a bare 1006.
+      if (!this.sessionBegan && !this.abortRequested) {
+        const info = STREAM_ERROR_CODES.upgrade_rejected;
+        this.emit("error", {
+          type: "error",
+          code: "upgrade_rejected",
+          message: `${this.method}(): ${info.title} — ${info.description} ${info.hint} [upgrade_rejected]`,
+        });
+      }
       this.pushToIterator(null);
       this.resolveClose(this.sessionEnd);
-      this.emit("close", { code: event.code, reason: event.reason ?? "" });
+      this.emit("close", {
+        code: event.code,
+        reason: event.reason ?? "",
+        description: describeStreamClose(event.code),
+      });
     });
 
     this.ws.addEventListener("error", () => {
@@ -237,7 +262,7 @@ export class TtsStreamConnection {
    */
   sendText(text: string, opts?: { id?: string }): void {
     if (this.ws.readyState !== WebSocket.OPEN) {
-      throw new Error("Stream is not open");
+      throw new StreamClosedError(`${this.method}().sendText`);
     }
     const frame: Record<string, unknown> = { type: "Text", text };
     if (opts?.id !== undefined) frame["id"] = opts.id;
@@ -275,6 +300,7 @@ export class TtsStreamConnection {
 
   /** Immediately drop the connection without waiting for pending synthesis. */
   abort(): void {
+    this.abortRequested = true;
     this.stopKeepAlive();
     try {
       this.ws.close(1000);

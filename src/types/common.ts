@@ -1,10 +1,22 @@
-export type SupportedLanguage =
+/**
+ * Language codes known at the time this SDK version was released. The live
+ * set is configured by platform admins and can change at runtime — discover
+ * it with `client.tts.listLanguages()`.
+ */
+export type KnownLanguage =
   | "yo"
   | "ig"
   | "ha"
   | "pcm"
   | "en"
   | "auto";
+
+/**
+ * Any language code the platform currently supports. Kept open (`string`)
+ * because the catalog is server-configured; the `KnownLanguage` union is
+ * preserved purely for editor autocomplete.
+ */
+export type SupportedLanguage = KnownLanguage | (string & {});
 
 export type JobStatus = "queued" | "processing" | "completed" | "failed";
 

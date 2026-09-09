@@ -31,6 +31,7 @@ export class AuthModule extends BaseModule {
         type: params.type,
         expires_in: params.expiresIn,
       },
+      "auth.createStreamToken",
     );
     return response.data;
   }

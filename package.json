@@ -1,6 +1,6 @@
 {
   "name": "myvoicemaker",
-  "version": "0.5.0",
+  "version": "0.2.0",
   "description": "Official JavaScript/TypeScript SDK for the VoiceMaker API",
   "author": "Collins Edim",
   "license": "MIT",
@@ -29,7 +29,8 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "dev": "tsup --watch"
+    "dev": "tsup --watch",
+    "test": "bun test"
   },
   "devDependencies": {
     "@types/node": "^25.9.0",

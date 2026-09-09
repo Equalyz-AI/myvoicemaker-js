@@ -1,5 +1,6 @@
 import { BaseModule } from "./base.js";
 import { poll } from "../utils/poll.js";
+import { InvalidArgumentError } from "../errors/index.js";
 import { AsrStreamConnection } from "../ws/stream-connection.js";
 import type {
   ListTranscriptionsParams,
@@ -22,6 +23,7 @@ export class ASRModule extends BaseModule {
     const { data } = await this.http.post<TranscriptionJob>(
       "/dev/v1/transcribe",
       body,
+      "asr.transcribe",
     );
     return data;
   }
@@ -39,13 +41,16 @@ export class ASRModule extends BaseModule {
       "/dev/v1/transcribe",
       filePath,
       fields,
+      "asr.transcribeFile",
     );
     return data;
   }
 
   async getResult(jobId: string): Promise<TranscriptionJob> {
     const { data } = await this.http.get<TranscriptionJob>(
-      `/dev/v1/transcribe/${jobId}`,
+      `/dev/v1/transcribe/${encodeURIComponent(jobId)}`,
+      undefined,
+      "asr.getResult",
     );
     return data;
   }
@@ -61,6 +66,7 @@ export class ASRModule extends BaseModule {
     const { data } = await this.http.get<PaginatedResponse<TranscriptionJob>>(
       "/dev/v1/transcriptions",
       query,
+      "asr.list",
     );
     return data;
   }
@@ -74,6 +80,7 @@ export class ASRModule extends BaseModule {
       () => this.getResult(jobId),
       (result) => TERMINAL_STATUSES.has(result.status),
       options,
+      "asr.poll",
     );
   }
 
@@ -84,6 +91,13 @@ export class ASRModule extends BaseModule {
    * Requires a global WebSocket (browsers, Node >= 22, Bun, Deno).
    */
   stream(params: StreamTranscriptionParams): AsrStreamConnection {
+    if (!params.language || (params.language as string) === "auto") {
+      throw new InvalidArgumentError(
+        "language",
+        "streaming needs an explicit language code (auto-detection is batch-only); pick one from tts.listLanguages() such as \"en\", \"yo\", \"ha\", \"ig\" or \"pcm\".",
+        "asr.stream",
+      );
+    }
     const url = this.http.buildWebSocketUrl("/dev/v1/transcribe/stream", {
       language: params.language,
       sample_rate: params.sampleRate ?? 16000,
@@ -95,6 +109,7 @@ export class ASRModule extends BaseModule {
       accessToken: params.accessToken,
       useSubprotocolAuth: params.useSubprotocolAuth,
       keepAliveMs: params.keepAliveMs,
+      method: "asr.stream",
     });
   }
 }

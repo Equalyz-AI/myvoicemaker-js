@@ -39,9 +39,10 @@ Barka da zuwa. Wannan gwaji ne na karatun rubutu kai tsaye. Kowace jimla tana is
         const player = createPcmPlayer();
         player.onUnderrun = () => log("(underrun: playback caught up)");
 
+        // language omitted → the platform's default; pass a code from
+        // client.tts.listLanguages() to pin one.
         const stream = client.tts.stream({
           voiceId: document.getElementById("voice").value.trim(),
-          language: "auto",
         });
         const startedAt = performance.now();
         let firstAudio = false;

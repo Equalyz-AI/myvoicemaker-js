@@ -1,3 +1,5 @@
+import type { StreamErrorCode } from "../errors/catalog.js";
+
 export interface TtsStreamParams {
   /** Preset voice id (see tts.listVoices()) or one of your custom voice ids. */
   voiceId: string;
@@ -78,9 +80,16 @@ export interface TtsSessionEnd {
     | "server_shutdown";
 }
 
+/**
+ * Protocol-level error reported during a session. The session may continue
+ * (invalid_message, text_too_large) or be closing (session_char_limit,
+ * insufficient_credits, idle_timeout) — see STREAM_ERROR_CODES.
+ * `upgrade_rejected` is synthesised by the SDK when the socket closes before
+ * session.begin.
+ */
 export interface TtsStreamErrorEvent {
   type: "error";
-  code: string;
+  code: StreamErrorCode | (string & {});
   message: string;
 }
 

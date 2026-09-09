@@ -1,6 +1,9 @@
 import {
+  ConfigurationError,
+  InvalidArgumentError,
+  NetworkError,
+  RequestTimeoutError,
   createApiError,
-  VoiceMakerError,
   type ApiErrorBody,
 } from "../errors/index.js";
 import type { ApiResponse, QueryParams, RateLimitHeaders } from "./types.js";
@@ -60,6 +63,11 @@ export interface HttpClientConfig {
   timeoutMs: number;
 }
 
+/**
+ * Thin fetch wrapper. Every request is tagged with the SDK method that made
+ * it (`method`, e.g. "tts.generate") so any error names the call a developer
+ * actually wrote instead of the endpoint behind it.
+ */
 export class HttpClient {
   private readonly apiKey: string | undefined;
   private readonly baseUrl: string;
@@ -73,36 +81,50 @@ export class HttpClient {
 
   async get<T>(
     path: string,
-    query?: QueryParams,
+    query: QueryParams | undefined,
+    method: string,
   ): Promise<ApiResponse<T>> {
     const url = this.buildUrl(path, query);
-    const response = await this.fetchWithTimeout(url, {
-      method: "GET",
-      headers: this.authHeaders(),
-    });
-    return this.parseResponse<T>(response);
+    const response = await this.fetchWithTimeout(
+      url,
+      { method: "GET", headers: this.authHeaders(method) },
+      method,
+    );
+    return this.parseResponse<T>(response, method);
   }
 
-  async post<T>(path: string, body: unknown): Promise<ApiResponse<T>> {
+  async post<T>(path: string, body: unknown, method: string): Promise<ApiResponse<T>> {
     const url = this.buildUrl(path);
-    const response = await this.fetchWithTimeout(url, {
-      method: "POST",
-      headers: { ...this.authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    return this.parseResponse<T>(response);
+    const response = await this.fetchWithTimeout(
+      url,
+      {
+        method: "POST",
+        headers: { ...this.authHeaders(method), "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      method,
+    );
+    return this.parseResponse<T>(response, method);
   }
 
   async postMultipart<T>(
     path: string,
     filePath: string,
     fields: Record<string, string | undefined>,
+    method: string,
   ): Promise<ApiResponse<T>> {
     const url = this.buildUrl(path);
+    const headers = this.authHeaders(method);
     const form = new FormData();
 
     const { readFile, basename } = await loadNodeFileHelpers();
-    const fileBuffer = await readFile(filePath);
+    let fileBuffer: Uint8Array<ArrayBuffer>;
+    try {
+      fileBuffer = await readFile(filePath);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new InvalidArgumentError("filePath", `cannot read '${filePath}' (${reason}).`, method);
+    }
     const fileName = basename(filePath);
     const blob = new Blob([fileBuffer]);
     form.append("audio", blob, fileName);
@@ -113,12 +135,12 @@ export class HttpClient {
       }
     }
 
-    const response = await this.fetchWithTimeout(url, {
-      method: "POST",
-      headers: this.authHeaders(),
-      body: form,
-    });
-    return this.parseResponse<T>(response);
+    const response = await this.fetchWithTimeout(
+      url,
+      { method: "POST", headers, body: form },
+      method,
+    );
+    return this.parseResponse<T>(response, method);
   }
 
   private buildUrl(path: string, query?: QueryParams): string {
@@ -143,11 +165,9 @@ export class HttpClient {
     return this.apiKey;
   }
 
-  private authHeaders(): Record<string, string> {
+  private authHeaders(method: string): Record<string, string> {
     if (!this.apiKey) {
-      throw new VoiceMakerError(
-        "This call requires an apiKey. Keep the key on your backend and, for browser streaming, mint an ephemeral token there (auth.createStreamToken) and pass it as accessToken.",
-      );
+      throw new ConfigurationError("api_key_required", method);
     }
     return { Authorization: `Bearer ${this.apiKey}` };
   }
@@ -155,6 +175,7 @@ export class HttpClient {
   private async fetchWithTimeout(
     url: string,
     init: RequestInit,
+    method: string,
   ): Promise<Response> {
     const controller = new AbortController();
     const timer = setTimeout(
@@ -164,6 +185,14 @@ export class HttpClient {
 
     try {
       return await fetch(url, { ...init, signal: controller.signal });
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new RequestTimeoutError(method, this.timeoutMs);
+      }
+      // fetch rejects with a TypeError for every transport-level failure
+      // (DNS, refused connection, TLS, CORS); wrap it so the message names
+      // the SDK call and the code is stable.
+      throw new NetworkError(method, error);
     } finally {
       clearTimeout(timer);
     }
@@ -185,7 +214,10 @@ export class HttpClient {
     };
   }
 
-  private async parseResponse<T>(response: Response): Promise<ApiResponse<T>> {
+  private async parseResponse<T>(
+    response: Response,
+    method: string,
+  ): Promise<ApiResponse<T>> {
     const requestId =
       response.headers.get("X-Request-Id") ?? undefined;
     const rateLimit = this.parseRateLimit(response);
@@ -195,13 +227,21 @@ export class HttpClient {
       try {
         body = (await response.json()) as ApiErrorBody;
       } catch {
+        // Non-JSON error (a proxy or CDN page, an HTML 404 from a wrong
+        // baseUrl): synthesise the standard shape so the error still names
+        // the call and carries a code.
         body = {
-          error: "Unknown error",
-          detail: `HTTP ${response.status}: ${response.statusText}`,
+          error: `HTTP ${response.status}`,
+          detail: response.statusText
+            ? `The server answered ${response.status} ${response.statusText} without a JSON error body.`
+            : `The server answered ${response.status} without a JSON error body.`,
         };
       }
-      const retryAfter = response.headers.get("Retry-After");
-      throw createApiError(response.status, body, retryAfter);
+      throw createApiError(response.status, body, {
+        method,
+        requestId,
+        retryAfterHeader: response.headers.get("Retry-After"),
+      });
     }
 
     const data = (await response.json()) as T;

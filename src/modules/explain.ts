@@ -18,6 +18,7 @@ export class ExplainModule extends BaseModule {
     const { data } = await this.http.post<ExplainResponse>(
       "/dev/v1/explain",
       body,
+      "explain.process",
     );
     return data;
   }

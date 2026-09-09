@@ -1,4 +1,5 @@
 import type { JobStatus, SupportedLanguage } from "./common.js";
+import type { StreamErrorCode } from "../errors/catalog.js";
 
 export interface TranscribeUrlParams {
   audio: string;
@@ -67,9 +68,15 @@ export interface StreamSessionEnd {
     | "server_shutdown";
 }
 
+/**
+ * Protocol-level error reported during a session. The session may continue
+ * (e.g. invalid_message) or be closing (idle_timeout, insufficient_credits) —
+ * see STREAM_ERROR_CODES for the meaning of each code. `upgrade_rejected` is
+ * synthesised by the SDK when the socket closes before session.begin.
+ */
 export interface StreamErrorEvent {
   type: "error";
-  code: string;
+  code: StreamErrorCode | (string & {});
   message: string;
 }
 

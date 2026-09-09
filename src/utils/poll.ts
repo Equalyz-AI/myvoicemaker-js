@@ -1,4 +1,4 @@
-import { TimeoutError } from "../errors/index.js";
+import { PollTimeoutError } from "../errors/index.js";
 
 const DEFAULT_INTERVAL_MS = 2_000;
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -8,6 +8,7 @@ export async function poll<T>(
   fn: () => Promise<T>,
   isDone: (result: T) => boolean,
   options?: { intervalMs?: number; timeoutMs?: number },
+  method?: string,
 ): Promise<T> {
   const intervalMs = options?.intervalMs ?? DEFAULT_INTERVAL_MS;
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -20,7 +21,7 @@ export async function poll<T>(
     }
 
     if (Date.now() >= deadline) {
-      throw new TimeoutError(jobId, timeoutMs);
+      throw new PollTimeoutError(jobId, timeoutMs, method);
     }
 
     await sleep(intervalMs);

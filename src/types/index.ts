@@ -1,4 +1,5 @@
 export type {
+  KnownLanguage,
   SupportedLanguage,
   JobStatus,
   OutputAudioFormat,
@@ -26,8 +27,13 @@ export type {
   ListVoicesParams,
   Voice,
   VoiceListResponse,
+  TtsMode,
   TtsGenerateParams,
   TtsGenerateResponse,
+  TtsJobResponse,
+  TtsResultResponse,
+  TtsLanguage,
+  TtsLanguageListResponse,
 } from "./tts.js";
 
 export type {

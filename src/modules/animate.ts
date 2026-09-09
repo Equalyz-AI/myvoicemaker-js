@@ -22,13 +22,16 @@ export class AnimateModule extends BaseModule {
     const { data } = await this.http.post<AnimateJobResponse>(
       "/dev/v1/animate/generate",
       body,
+      "animate.generate",
     );
     return data;
   }
 
   async getResult(jobId: string): Promise<AnimateResultResponse> {
     const { data } = await this.http.get<AnimateResultResponse>(
-      `/dev/v1/animate/${jobId}`,
+      `/dev/v1/animate/${encodeURIComponent(jobId)}`,
+      undefined,
+      "animate.getResult",
     );
     return data;
   }
@@ -42,6 +45,7 @@ export class AnimateModule extends BaseModule {
       () => this.getResult(jobId),
       (result) => TERMINAL_STATUSES.has(result.status),
       options,
+      "animate.poll",
     );
   }
 }

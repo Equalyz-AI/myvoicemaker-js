@@ -18,7 +18,8 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          # Exact patched release (Node security release 2026-10-21, CVE-2026-111497).
+          node-version: 22.23.4
           cache: npm
 
       - uses: oven-sh/setup-bun@v2
@@ -52,7 +53,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [18, 20, 22, 24]
+        # 18 and 20 are EOL and stay only as import-compat checks for users on
+        # them (no patched release exists); the active lines are pinned to the
+        # 2026-10-21 security releases.
+        node: [18, 20, 22.23.4, 24.22.1, 26.12.1]
     steps:
       - uses: actions/checkout@v5
 

@@ -47,7 +47,8 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          # Exact patched release (Node security release 2026-10-21, CVE-2026-111497).
+          node-version: 24.22.1
           registry-url: https://registry.npmjs.org
 
       - name: Ensure npm >= 11.5.1 (trusted publishing support)

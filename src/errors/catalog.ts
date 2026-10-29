@@ -67,6 +67,14 @@ export const ERROR_CODES = define({
     hint: "Re-enable the project in the dashboard, or use a key from an active project.",
     retryable: false,
   },
+  account_suspended: {
+    status: 403,
+    title: "Forbidden",
+    description:
+      "The account that owns this API key is suspended, so all of its keys and stream tokens are refused.",
+    hint: "Contact VoiceMaker support with the requestId to resolve the suspension; creating a new key will not help.",
+    retryable: false,
+  },
   api_access_not_enabled: {
     status: 403,
     title: "Forbidden",
@@ -227,6 +235,22 @@ export const ERROR_CODES = define({
     hint: "Use a public or pre-signed URL instead.",
     retryable: false,
   },
+  file_url_host_not_allowed: {
+    status: 400,
+    title: "Submission failed",
+    description:
+      "The media URL resolves to, or redirects to, a host the server will not fetch from (a private, loopback, link-local or otherwise non-public address).",
+    hint: "Use a URL on the public internet for asr.transcribe() or animate.generate(), or upload the file with asr.transcribeFile().",
+    retryable: false,
+  },
+  invalid_webhook_url: {
+    status: 400,
+    title: "Invalid webhook URL",
+    description:
+      "webhookUrl must be a public http or https URL; private, loopback and link-local addresses are refused.",
+    hint: "Pass an endpoint reachable from the public internet as webhookUrl, or leave it out and wait for the job with asr.poll().",
+    retryable: false,
+  },
   file_url_unreachable: {
     status: 422,
     title: "Submission failed",
@@ -310,6 +334,16 @@ export const ERROR_CODES = define({
     description: "The server could not process the submitted audio.",
     hint: "Retry; if it persists, report it with the requestId.",
     retryable: true,
+  },
+
+  // ---- animation input ------------------------------------------------------
+  audio_url_unreadable: {
+    status: 422,
+    title: "Unreadable audio",
+    description:
+      "The audio_url passed to animate.generate() could not be downloaded, or its duration could not be read. The job is priced from that duration, so it is required.",
+    hint: "Check that audio_url serves the raw audio file (mp3, wav, m4a) with a 2xx response from the public internet, then call animate.generate() again.",
+    retryable: false,
   },
 
   // ---- voices ---------------------------------------------------------------

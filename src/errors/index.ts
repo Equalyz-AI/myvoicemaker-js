@@ -229,7 +229,7 @@ export class InsufficientCreditsError extends VoiceMakerAPIError {
   }
 }
 
-/** 403 — key revoked, project disabled, plan without API access, or missing scope. */
+/** 403 — key revoked, project disabled, account suspended, plan without API access, or missing scope. */
 export class ForbiddenError extends VoiceMakerAPIError {
   constructor(body: ApiErrorBody, options: ApiErrorOptions = {}) {
     super(403, body, options);

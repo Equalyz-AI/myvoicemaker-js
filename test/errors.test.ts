@@ -158,6 +158,23 @@ describe("createApiError", () => {
     expect(createApiError(403, body("api_key_revoked"))).toBeInstanceOf(PermissionError);
   });
 
+  test("suspension and URL-safety codes map to their status classes", () => {
+    const cases: Array<[number, ErrorCode, typeof ForbiddenError | typeof ValidationError]> = [
+      [403, "account_suspended", ForbiddenError],
+      [400, "file_url_host_not_allowed", ValidationError],
+      [400, "invalid_webhook_url", ValidationError],
+      [422, "audio_url_unreadable", ValidationError],
+    ];
+    for (const [status, code, cls] of cases) {
+      expect(ERROR_CODES[code].status, code).toBe(status);
+      const err = createApiError(status, body(code));
+      expect(err, code).toBeInstanceOf(cls);
+      expect(err.code, code).toBe(code);
+      expect(err.hint, code).toBe(ERROR_CODES[code].hint);
+      expect(err.retryable, code).toBe(false);
+    }
+  });
+
   test("parses Retry-After and marks retryable from the catalog", () => {
     const err = createApiError(429, body("rate_limited"), { retryAfterHeader: "17" });
     expect(err).toBeInstanceOf(RateLimitError);

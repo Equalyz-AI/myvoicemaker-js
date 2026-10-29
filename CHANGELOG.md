@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Four new API error codes** in the catalog (`describeErrorCode()`, hints,
+  `err.retryable`):
+  - `account_suspended` (403, `ForbiddenError`): the account that owns the key
+    is suspended; every key and stream token on it is refused.
+  - `file_url_host_not_allowed` (400, `ValidationError`): the URL given to
+    `asr.transcribe()` or `animate.generate()` resolves or redirects to a
+    private, loopback, link-local or otherwise non-public address.
+  - `invalid_webhook_url` (400, `ValidationError`): `webhookUrl` is not a
+    public http(s) URL.
+  - `audio_url_unreadable` (422, `ValidationError`): `animate.generate()` could
+    not download `audio_url` or read its duration (animations are now priced
+    from the real audio length).
+
+  Older SDK versions already raise these as the status-based class with the
+  raw code on `err.code`; this adds the descriptions and hints.
+
 ## 0.2.0 — 2026-08-26
 
 ### Added
